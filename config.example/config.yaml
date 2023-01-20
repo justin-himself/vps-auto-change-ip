@@ -1,0 +1,41 @@
+# https://schedule.readthedocs.io/en/stable/examples.html
+schedule:
+  # - every(5).minutes
+  - every().hour
+  #- every().day.at("10:30")
+  #- every().monday
+  #- every().wednesday.at("13:15")
+  #- every().minute.at(":17")
+
+ping:
+  test_address:
+    china_ip: 101.6.6.6
+    china_ipv6: 2001:da8::666
+    foreign_ip_unblocked: www.bing.com
+    foreign_ip_blocked: www.google.com
+  server_config:
+    token:
+      - YOURSERVERTOKEN
+  client_config:
+    use_local: true
+    server_addr: 127.0.0.1:8000
+    server_token: YOURSERVERTOKEN
+
+cloud_provider:
+  oracle:
+    auth:
+      user_ocid: ocid1.user.oc1..4cu7zjowikdcwxgjiyjiezpnwnvytwx5p5yqptr93buoawk9tc2vvcj3sny3
+      tenancy_ocid: ocid1.tenancy.oc1..vc97zarkzbuhgb3v4jb2u3cfedfihcmsvqpd97p7ebb4qtwowysxex57gvi9
+      region: us-phoenix-1
+      fingerprint: 12:34:56:78:9a:bc:de:a1:a2:a3:a4:a5:a6:a7:a8:a9
+      key_file: config/oracle_private.key # place your private key
+    private_ip_ocid:
+      - ocid1.privateip.oc1.us-phoenix-1.m5ny7p4tady4g7ga9p3nunqw29qx9umsp5pn3jv4jpyda2qvixdz2maamssi
+      - ocid1.privateip.oc1.us-phoenix-1.i9hxpjyt2nm5sjk42zbhpnrhfv2xq4rdz9n3sh5v5kes3zufbfusfi2wi7ao
+
+panel:
+  v2board:
+    host: example.com
+    user: root
+    password: my_secure_password
+    db: v2board
