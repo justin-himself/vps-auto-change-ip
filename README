@@ -1,5 +1,0 @@
-# vps auto change ip
-
-这是一个简单的 python 脚本, 目的是在 vps ip 被墙的时候自动切换 ip 并同步更新面板里对应的 ip.
-
-_目前只支持 oracle 和 v2board. 其他提供商和面板的支持等待开发._
