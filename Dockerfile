@@ -1,10 +1,11 @@
-FROM python:3.7 as builder
+FROM python:latest as builder
 COPY requirements.txt /requirements.txt
 RUN \
   mkdir /install &&\
+  pip install --upgrade pip &&\
   pip install --prefix /install -r /requirements.txt
 
-FROM python:3.7-slim
+FROM python:slim
 COPY --from=builder /install /usr/local
 COPY app /app
 VOLUME /config
