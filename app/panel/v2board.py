@@ -14,16 +14,25 @@ class V2board:
     def __init__(self, config):
 
         self.config = config["panel"]["v2board"]
-        self.db = mysql.connector.connect(
+
+    def connect_to_db(self):
+        return mysql.connector.connect(
             host=self.config["host"],
             user=self.config["user"],
             password=self.config["password"], 
             db=self.config["db"]
         )
 
+    def disconnect(self, connection):
+        connection.disconnect()
+
+
     def update_ip(self, oldip, newip):
+
+        db = self.connect_to_db()
+        cur = db.cursor()
+
         def _(oldip, newip, table_name, entry_name):
-            cur = self.db.cursor()
             sql = f"""
                 UPDATE {table_name} 
                 SET {entry_name} = "{newip}" 
@@ -35,4 +44,5 @@ class V2board:
             for entry_name in self.ENTRY_NAME:
                 _(oldip, newip, table_name, entry_name)
 
-        self.db.commit()
+        db.commit()
+        self.disconnect(db)
