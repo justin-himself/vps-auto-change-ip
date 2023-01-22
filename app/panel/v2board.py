@@ -15,6 +15,10 @@ class V2board:
 
         self.config = config["panel"]["v2board"]
 
+        # test connect
+        conn = self.connect_to_db()
+        self.disconnect(conn)
+
     def connect_to_db(self):
         return mysql.connector.connect(
             host=self.config["host"],

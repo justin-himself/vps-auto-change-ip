@@ -55,6 +55,10 @@ except Exception as e:
 
 logging.info(f"panel {module_name} was successfully initialized.")
 
+if len(cloud_providers) == 0 or panel is None:
+    logging.error("cloud_provider or panel init failed")
+    sys.exit()
+
 
 # main loop
 def mainloop():
