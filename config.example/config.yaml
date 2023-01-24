@@ -29,10 +29,10 @@ cloud_provider:
       region: us-phoenix-1
       fingerprint: 12:34:56:78:9a:bc:de:a1:a2:a3:a4:a5:a6:a7:a8:a9
       key_file: config/oracle_private.key # place your private key
-    private_ip_ocid:
-      - ocid1.privateip.oc1.us-phoenix-1.m5ny7p4tady4g7ga9p3nunqw29qx9umsp5pn3jv4jpyda2qvixdz2maamssi
-      - ocid1.privateip.oc1.us-phoenix-1.i9hxpjyt2nm5sjk42zbhpnrhfv2xq4rdz9n3sh5v5kes3zufbfusfi2wi7ao
-
+    enable_ipv6: false # change ipv6 as well?
+    vnic_ocid:
+      - ocid1.vnic.oc1.us-phoenix-1.m5ny7p4tady4g7ga9p3nunqw29qx9umsp5pn3jv4jpyda2qvixdz2maamssi
+      - ocid1.vnic.oc1.us-phoenix-1.i9hxpjyt2nm5sjk42zbhpnrhfv2xq4rdz9n3sh5v5kes3zufbfusfi2wi7ao
 panel:
   v2board:
     host: example.com

@@ -42,7 +42,6 @@ logging.info("Initiated " + str(len(cloud_providers)) +
              "/" + str(len(config['cloud_provider'])) + 
              " cloud providers.")
 
-
 panel = None
 try:
     module_name = next(iter(config["panel"]))
