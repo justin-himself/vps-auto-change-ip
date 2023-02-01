@@ -11,8 +11,8 @@ ping:
   test_address:
     china_ip: 101.6.6.6
     china_ipv6: 2001:da8::666
-    foreign_ip_unblocked: www.bing.com
-    foreign_ip_blocked: www.google.com
+    foreign_ip_unblocked: 8.8.8.8
+    foreign_ip_blocked: 142.250.66.238
   server_config:
     token:
       - YOURSERVERTOKEN
