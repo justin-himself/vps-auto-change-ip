@@ -66,7 +66,7 @@ def mainloop():
 
     # test ping
     try:
-        test_ping_result = ping(["1.1.1.1"], config)
+        test_ping_result = ping(["8.8.8.8"], config)
     except Exception as e:
         logging.error("test ping throw exception:")
         logging.exception(e)
