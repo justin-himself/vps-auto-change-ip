@@ -7,7 +7,7 @@ class V2board:
     update ip in v2board, via sql
     """
 
-    TABLE_NAME = ["v2_server_vmess", "v2_server_trojan", "v2_server_shadowsocks"]
+    TABLE_NAME = ["v2_server_v2ray", "v2_server_trojan", "v2_server_shadowsocks"]
 
     ENTRY_NAME = ["host"]
 
