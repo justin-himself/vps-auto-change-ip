@@ -23,7 +23,7 @@ class V2board:
         return mysql.connector.connect(
             host=self.config["host"],
             user=self.config["user"],
-            password=self.config["password"], 
+            password=self.config["password"],
             db=self.config["db"]
         )
 
@@ -38,8 +38,8 @@ class V2board:
 
         def _(oldip, newip, table_name, entry_name):
             sql = f"""
-                UPDATE {table_name} 
-                SET {entry_name} = "{newip}" 
+                UPDATE {table_name}
+                SET {entry_name} = "{newip}"
                 WHERE {entry_name} = "{oldip}"
                 """
             cur.execute(sql)

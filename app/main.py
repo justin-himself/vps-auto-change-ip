@@ -99,6 +99,7 @@ def mainloop():
         if not result:
             total_cnt += 1
             try:
+                
                 oldip = ip_provider_map[idx][0]
                 newip = ip_provider_map[idx][1].change_ip(oldip)
                 panel.update_ip(oldip, newip)
@@ -108,7 +109,7 @@ def mainloop():
                 logging.error(f"fail to change {oldip} into {newip}")
                 logging.exception(e)
                 return
-
+            
     logging.info(f"Task done. {total_cnt - failed_cnt}/{total_cnt} IP changed.")
             
 # schedule mainloop

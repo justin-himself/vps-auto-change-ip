@@ -39,3 +39,8 @@ panel:
     user: root
     password: my_secure_password
     db: v2board
+  cloudflare:
+    email: user@example.com
+    api_key: your_cloudflare_api_key
+    domain: example.com
+    subdomian: jp.example.com #optional, can be same with domain
