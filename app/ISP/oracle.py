@@ -1,39 +1,36 @@
+from ISP.interface import ISPInterface
+from typing import List
 import oci
-import logging
 
-class Oracle:
+class Oracle(ISPInterface):
 
-    def __init__(self, config):
+    def __init__(
+            self,
+            user : str,
+            key_file : str,
+            fingerprint :str,
+            tenancy : str,
+            region : str,
+            vnic_ocid_list : List[str],
+            enable_ipv6 : bool = False
+        ):
 
-        self.config = config["cloud_provider"]["oracle"]
 
         self.oci_config = {
-            "user": self.config["auth"]["user_ocid"],
-            "key_file": self.config["auth"]["key_file"],
-            "fingerprint": self.config["auth"]["fingerprint"],
-            "tenancy": self.config["auth"]["tenancy_ocid"],
-            "region": self.config["auth"]["region"]
+            "user": user,
+            "key_file": key_file,
+            "fingerprint": fingerprint,
+            "tenancy": tenancy,
+            "region": region
         }
-
+        self.vnic_ocid_list = vnic_ocid_list
+        self.enable_ipv6 = enable_ipv6
         self.network_client = oci.core.VirtualNetworkClient(self.oci_config)   
-
-    def _update_ip_list(self):
-        
-        self.ip_list = []
-        
-        for vnic_ocid in self.config["vnic_ocid"]:
-            private_ip_data = self._list_private_ip(vnic_ocid)
-            self.ip_list += [self._get_public_ip(x.id) for x in private_ip_data]
-            
-            if self.config["enable_ipv6"]:
-                self.ip_list += self._list_ipv6(vnic_ocid)
-
-        return self.ip_list
 
     """
     return a list of public ip
     """
-    def list_ip(self):
+    def get_node_address_list(self):
         self.ip_list = self._update_ip_list()
         results = [item.ip_address for item in self.ip_list]
         return results
@@ -41,7 +38,7 @@ class Oracle:
     """
     change specified ip and return new one
     """
-    def change_ip(self, old_ip):
+    def update_node_address(self, old_ip):
 
         # get ip information
         old_ip_data = None
@@ -69,6 +66,19 @@ class Oracle:
         self.ip_list.append(new_ip_data)
 
         return new_ip_data.ip_address
+
+    def _update_ip_list(self):
+        
+        self.ip_list = []
+        
+        for vnic_ocid in self.vnic_ocid_list:
+            private_ip_data = self._list_private_ip(vnic_ocid)
+            self.ip_list += [self._get_public_ip(x.id) for x in private_ip_data]
+            
+            if self.enable_ipv6:
+                self.ip_list += self._list_ipv6(vnic_ocid)
+
+        return self.ip_list
 
     def _list_private_ip(self, vnic_ocid):
         list_private_ips_response = self.network_client.list_private_ips(
@@ -119,7 +129,7 @@ class Oracle:
     def _create_public_ip(self, private_ip_ocid, lifetime):
         create_public_ip_response = self.network_client.create_public_ip(
             create_public_ip_details=oci.core.models.CreatePublicIpDetails(
-                compartment_id=self.config["auth"]["tenancy_ocid"],
+                compartment_id=self.oci_config["tenancy"],
                 lifetime=lifetime,
                 private_ip_id=private_ip_ocid)
         )

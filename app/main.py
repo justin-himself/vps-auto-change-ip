@@ -4,7 +4,6 @@ import schedule
 import logging, coloredlogs
 import os, sys
 from time import sleep
-from ping_client import local_ping, remote_ping
 
 # configure logging
 logger = logging.getLogger(__name__)
@@ -17,46 +16,7 @@ with open("config/config.yaml", "r") as f:
 logging.info("Start init...")
 
 
-# init ping
-if config["ping"]["client_config"]["use_local"]:
-    # quit if non-root
-    user = os.getuid()
-    if user != 0:                                                                                      
-        logging.error("Re-Execute as root please.")
-        sys.exit()
-    ping = local_ping
-else:
-    ping = remote_ping
-
-# import modules
-cloud_providers = []    
-for provider in config["cloud_provider"]:
-    try:
-        module = importlib.import_module("cloud_provider." + provider)
-        instance = getattr(module, provider.capitalize())(config)
-        cloud_providers.append(instance)
-    except Exception as e:
-        logging.exception(str(e))
-
-logging.info("Initiated " + str(len(cloud_providers)) + 
-             "/" + str(len(config['cloud_provider'])) + 
-             " cloud providers.")
-
-panel = None
-try:
-    module_name = next(iter(config["panel"]))
-    module = importlib.import_module("panel." + module_name)
-    panel = getattr(module, module_name.capitalize())(config)
-    if len(config["panel"]) > 1:
-        logging.warning(f"Configured mulitple panels, using {module.__name__} for now.")
-except Exception as e:
-    logging.exception(e)
-
 logging.info(f"panel {module_name} was successfully initialized.")
-
-if len(cloud_providers) == 0 or panel is None:
-    logging.error("cloud_provider or panel init failed")
-    sys.exit()
 
 
 # main loop

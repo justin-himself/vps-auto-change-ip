@@ -1,7 +1,8 @@
+from Panel.interface import PanelInterface
 import mysql.connector
 
+class V2Board(PanelInterface):
 
-class V2board:
 
     """
     update ip in v2board, via sql
@@ -9,29 +10,42 @@ class V2board:
 
     TABLE_NAME = ["v2_server_v2ray", "v2_server_trojan", "v2_server_shadowsocks"]
 
-    ENTRY_NAME = ["host"]
+    def __init__(
+        self, 
+        db_host:str,
+        db_name:str,
+        db_user:str,
+        db_password:str,
+    ):
 
-    def __init__(self, config):
-
-        self.config = config["panel"]["v2board"]
-
+        self.db_host = db_host
+        self.db_name = db_name
+        self.db_user = db_user
+        self.db_password = db_password
+    
         # test connect
         conn = self.connect_to_db()
         self.disconnect(conn)
 
-    def connect_to_db(self):
-        return mysql.connector.connect(
-            host=self.config["host"],
-            user=self.config["user"],
-            password=self.config["password"],
-            db=self.config["db"]
-        )
+    def get_node_address_list(self):
+        db = self.connect_to_db()
+        cur = db.cursor()
+        addr_list = [ ]
 
-    def disconnect(self, connection):
-        connection.disconnect()
+        for table_name in self.TABLE_NAME:
+            sql = f"""
+                SELECT host, port FROM {table_name}
+                """
+            cur.execute(sql)
+            rows = cur.fetchall()
+            for row in rows:
+                addr_list.append((row[0],row[1]))
+            
+        db.commit()
+        self.disconnect(db)
+        return addr_list
 
-
-    def update_ip(self, oldip, newip):
+    def update_node_address(self, old_addr, new_addr):
 
         db = self.connect_to_db()
         cur = db.cursor()
@@ -45,8 +59,19 @@ class V2board:
             cur.execute(sql)
 
         for table_name in self.TABLE_NAME:
-            for entry_name in self.ENTRY_NAME:
-                _(oldip, newip, table_name, entry_name)
+            _(old_addr, new_addr, table_name, "host")
 
         db.commit()
         self.disconnect(db)
+
+    
+    def connect_to_db(self):
+        return mysql.connector.connect(
+            host=self.db_host,
+            user=self.db_user,
+            password=self.db_password,
+            db=self.db_host
+        )
+
+    def disconnect(self, connection):
+        connection.disconnect()
