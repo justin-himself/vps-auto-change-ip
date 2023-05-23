@@ -20,4 +20,4 @@ class RemotePing(PingerInterface):
         response = requests.get(f"{self.addr}/ping/?token={self.token}?method={self.method}" + args)
         if response.status_code != 200:
             raise Exception(response.text)
-        return [ip for ip in response.json().values()]
+        return {address_list[idx]:response.json().values()[idx] for idx in range(len(address_list))}
