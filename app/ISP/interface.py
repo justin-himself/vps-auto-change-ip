@@ -8,6 +8,6 @@ class ISPInterface(ABC):
         pass
 
     @abstractmethod
-    def update_ip_address(self, old_ip:str) -> None:
+    def update_ip_address(self, old_ip:str) -> str:
         pass
     

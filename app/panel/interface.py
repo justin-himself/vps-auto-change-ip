@@ -4,7 +4,7 @@ from typing import List, Tuple
 class PanelInterface(ABC):
     
     @abstractmethod
-    def get_node_address_list(self) -> List[Tuple[str,str]]:
+    def get_node_address_list(self) -> List[str]:
         pass
 
     @abstractmethod

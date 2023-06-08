@@ -24,11 +24,11 @@ class V2Board(PanelInterface):
         self.db_password = db_password
     
         # test connect
-        conn = self.connect_to_db()
-        self.disconnect(conn)
+        conn = self.__connect_to_db()
+        self.__disconnect(conn)
 
     def get_node_address_list(self):
-        db = self.connect_to_db()
+        db = self.__connect_to_db()
         cur = db.cursor()
         addr_list = [ ]
 
@@ -39,15 +39,15 @@ class V2Board(PanelInterface):
             cur.execute(sql)
             rows = cur.fetchall()
             for row in rows:
-                addr_list.append((row[0],row[1]))
+                addr_list.append(f"{row[0]}:{row[1]}")
             
         db.commit()
-        self.disconnect(db)
+        self.__disconnect(db)
         return addr_list
 
     def update_node_address(self, old_addr, new_addr):
 
-        db = self.connect_to_db()
+        db = self.__connect_to_db()
         cur = db.cursor()
 
         def _(oldip, newip, table_name, entry_name):
@@ -62,10 +62,10 @@ class V2Board(PanelInterface):
             _(old_addr, new_addr, table_name, "host")
 
         db.commit()
-        self.disconnect(db)
+        self.__disconnect(db)
 
     
-    def connect_to_db(self):
+    def __connect_to_db(self):
         return mysql.connector.connect(
             host=self.db_host,
             user=self.db_user,
@@ -73,5 +73,5 @@ class V2Board(PanelInterface):
             db=self.db_host
         )
 
-    def disconnect(self, connection):
+    def __disconnect(self, connection):
         connection.disconnect()

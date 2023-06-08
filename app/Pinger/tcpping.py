@@ -20,7 +20,7 @@ class TcpPing(PingerInterface):
     def ping(self, address_list):
 
         test_list = [x[0] for x in self.TEST_ADDR_EXPECTATIONS]
-        merged_results = [x.is_alive for x in TCPPing.multi_tcpping_with_port(address_list + test_list)]
+        merged_results = [x.is_alive for x in TcpPing.multi_tcpping_with_port(address_list + test_list)]
         ping_result = {address_list[idx]:merged_results[idx] for idx in range(len(address_list))}
         test_result = {test_list[idx]:merged_results[len(address_list) + idx] for idx in range(len(test_list))}
         
@@ -56,7 +56,7 @@ class TcpPing(PingerInterface):
             tasks_pending = set()
             for address in addresses:
 
-                ip, port = TCPPing.seperate_ip_port(address)
+                ip, port = TcpPing.seperate_ip_port(address)
                 
                 if len(tasks_pending) >= CONCURRENT_TASKS:
                     _, tasks_pending = await asyncio.wait(

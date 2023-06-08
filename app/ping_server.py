@@ -5,7 +5,7 @@ from starlette.responses import JSONResponse
 import utils
 
 # load_config 
-with open("config/config.yaml", "r") as f:
+with open("config/ping_server.yaml", "r") as f:
     config = yaml.load(f, Loader=yaml.SafeLoader)["ping"]
 
 app = FastAPI(docs_url="/")
@@ -28,7 +28,7 @@ async def ping(
 
     global config
 
-    if token not in config["server_config"]["token"]:
+    if token not in config["token"]:
         return JSONResponse(
             status_code=403,
             content={"message": "authenticate failed"},

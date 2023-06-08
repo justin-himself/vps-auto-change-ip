@@ -1,85 +1,71 @@
+import utils
 import yaml
-import importlib
-import schedule
+import time
+import schedule, threading
 import logging, coloredlogs
-import os, sys
-from time import sleep
 
-# configure logging
-logger = logging.getLogger(__name__)
-coloredlogs.install(level='INFO',fmt="[%(asctime)s][%(module)s][%(levelname)s] %(message)s")
+def main():
 
-# load_config 
-with open("config/config.yaml", "r") as f:
-    config = yaml.load(f, Loader=yaml.SafeLoader)
+    # load config
+    with open("config/config.yaml", "r") as f:
+        config = yaml.load(f, Loader=yaml.SafeLoader)
 
-logging.info("Start init...")
+    # configure logging
+    logger = logging.getLogger(__name__)
+    coloredlogs.install(level='INFO',fmt="[%(asctime)s][%(module)s][%(levelname)s] %(message)s")
+
+    # schedule tasks
+    for task in config["Tasks"]:
+        for s in task["Schedule"]:
+            cmd = f"schedule.{s}.do(do_task, task)"
+            logging.info(f"applied {cmd}")
+            exec(cmd)
+
+    # run each task immediately once
+    for task in config["Tasks"]:
+        do_task(task)
+
+    # main loop 
+    while True:
+        time.sleep(1)
+        schedule.run_pending()
 
 
-logging.info(f"panel {module_name} was successfully initialized.")
+def do_task(task_config):
 
-
-# main loop
-def mainloop():
-
-    logging.info("Start execution...")
-
-    # test ping
-    try:
-        test_ping_result = ping(["8.8.8.8"], config)
-    except Exception as e:
-        logging.error("test ping throw exception:")
-        logging.exception(e)
-        return 
-    if not test_ping_result:
-        logging.error("test ping failed")
-        return 
-    logging.info("test ping success.")
-
-    # fetch ip
-    ip_provider_map = []
-    for provider in cloud_providers:
-        ips = provider.list_ip()
-        try:
-            ip_provider_map += [ (ip, provider) for ip in ips]
-        except Exception as e:
-            logging.error(f"{provider.__name__} failed with follwing exception:")
-            logging.exception(e)
-
-    if ip_provider_map == []:
-        logging.warning("0 ip fetch, exiting this run.")
-        return
-
-    logging.info(f"fetched {len(ip_provider_map)} ip")
-
-    ping_results = ping([x[0] for x in ip_provider_map], config)
-
-    total_cnt = failed_cnt = 0
-    for idx, result in enumerate(ping_results):
-        if not result:
-            total_cnt += 1
-            try:
-                
-                oldip = ip_provider_map[idx][0]
-                newip = ip_provider_map[idx][1].change_ip(oldip)
-                panel.update_ip(oldip, newip)
-                logging.info(f"{oldip} -> {newip}")
-            except Exception as e:
-                failed_cnt += 1
-                logging.error(f"fail to change {oldip} into {newip}")
-                logging.exception(e)
-                return
+    def _():
+        
+        # load modules
+        pinger = utils.load_module("Pinger", task_config["Pinger"]["Type"])
+        isp = utils.load_module("ISP", task_config["ISP"]["Type"])
+        if task_config["Panel"]["Type"] is not "None":
+            panel = utils.load_module("Panel", task_config["Panel"]["Type"])
+        if task_config["CDN"]["Type"] is not "None":
+            cdn = utils.load_module("ISP", task_config["CDN"]["Type"])
             
-    logging.info(f"Task done. {total_cnt - failed_cnt}/{total_cnt} IP changed.")
-            
-# schedule mainloop
-for s in config["schedule"]:
-    cmd = f"schedule.{s}.do(mainloop)"
-    logging.info(f"applied {cmd}")
-    exec(cmd)
+        # Fetch address list from panel / cdn
+        addr_list = panel.get_node_address_list()
+        arr = []
 
-mainloop()
+        # Ping each addresss
+        ping_result_list = pinger.ping(addr_list)
 
-while True:
-    sleep(1)
-    schedule.run_pending()
+        # Change IP at ISP 
+        addr_change_list = []
+        for oldip, result in ping_result_list:
+            if result == False:
+                newip = isp.update_ip_address(oldip)    
+                addr_change_list.append((oldip, newip))
+
+        # Feedback to Panel
+        for addr_change_
+
+        # Feedback to CDN
+
+    
+    task_thread = threading.Thread(target=_)
+    task_thread.start()
+
+
+if __name__ == "__main__":
+    exit(main())

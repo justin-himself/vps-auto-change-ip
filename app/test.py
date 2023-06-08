@@ -1,1 +1,3 @@
-from Panel.v2board import V2Boa
+d = {}
+
+print(d[1])
