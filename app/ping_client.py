@@ -48,7 +48,7 @@ def remote_ping(ipaddress_list : list, config):
     addr = config["ping"]["client_config"]["server_addr"]
     token = config["ping"]["client_config"]["server_token"]
     args = "&addr=" + "&addr=".join(ipaddress_list)
-    response = requests.get(f"{addr}/ping/?token={token}" + args)
+    response = requests.get(f"{addr}/ping?token={token}" + args)
     if response.status_code != 200:
         raise Exception(response.text)
     return [ip for ip in response.json().values()]
