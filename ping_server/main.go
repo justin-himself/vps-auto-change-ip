@@ -173,29 +173,39 @@ func logRequest(next http.HandlerFunc) http.HandlerFunc {
 func autoPing() {
     ticker := time.NewTicker(config.Ping.AutoPingInterval)
     for range ticker.C {
-        now := time.Now()
-
         mutex.Lock()
-        for ip, entry := range cache {
-            if now.Sub(entry.LastAutoPinged) < config.Ping.AutoPingInterval {
-                continue // Skip if recently auto-pinged
-            }
-
-            result := pingAddress(ip)
-            entry.Result = result
-            entry.LastAutoPinged = now
-            cache[ip] = entry
-
-            log.Printf("Auto-pinged %s with result %t", ip, result)
-
-            if now.Sub(entry.LastRequested) > config.Ping.CacheTTL {
-                log.Printf("Removing %s from cache due to inactivity", ip)
-                delete(cache, ip)
-            }
+        // Copy keys to avoid holding the lock while pinging
+        ips := make([]string, 0, len(cache))
+        for ip := range cache {
+            ips = append(ips, ip)
         }
         mutex.Unlock()
+
+        for _, ip := range ips {
+            now := time.Now()
+
+            // Perform the ping without holding the mutex
+            result := pingAddress(ip)
+
+            mutex.Lock()
+            entry, exists := cache[ip]
+            if exists {
+                entry.Result = result
+                entry.LastAutoPinged = now
+                cache[ip] = entry
+
+                log.Printf("Auto-pinged %s with result %t", ip, result)
+
+                if now.Sub(entry.LastRequested) > config.Ping.CacheTTL {
+                    log.Printf("Removing %s from cache due to inactivity", ip)
+                    delete(cache, ip)
+                }
+            }
+            mutex.Unlock()
+        }
     }
 }
+
 
 func debugHandler(w http.ResponseWriter, r *http.Request) {
     token := r.URL.Query().Get("token")
@@ -235,7 +245,8 @@ func main() {
     go autoPing()
 
     http.HandleFunc("/ping", logRequest(pingHandler))
-    http.HandleFunc("/debug", debugHandler)
+    http.HandleFunc("/debug", logRequest(debugHandler))
+
 
     log.Printf("Server starting on port %d...", config.API.Port)
     if err := http.ListenAndServe(fmt.Sprintf(":%d", config.API.Port), nil); err != nil {
