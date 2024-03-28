@@ -1,0 +1,7 @@
+ping:
+  autoPingInterval: 15s
+  cacheValidDuration: 5m # will directly return cache if last auto or manual pinged in less than duration
+  cacheTTL: 3h #delete cache entry after this long without manual ping
+api:
+  port: 8080
+

@@ -4,27 +4,58 @@ import (
     "bufio"
     "encoding/json"
     "fmt"
+    "gopkg.in/yaml.v2"
+    "io/ioutil"
     "log"
     "net/http"
     "os"
     "os/exec"
-    "strings"
     "sync"
     "time"
 )
 
 var validAPIKeys map[string]struct{}
 var cache = make(map[string]CacheEntry)
+var mutex sync.Mutex
+
+type Config struct {
+    Ping struct {
+        AutoPingInterval        time.Duration `yaml:"autoPingInterval"`
+        CacheValidDuration time.Duration `yaml:"cacheValidDuration"`
+        CacheTTL   time.Duration `yaml:"cacheTTL"`
+    } `yaml:"ping"`
+    API struct {
+        Port int `yaml:"port"`
+    } `yaml:"api"`
+}
+
+var config Config
 
 type CacheEntry struct {
-    Timestamp time.Time
-    Result    bool
+    Result         bool
+    LastRequested  time.Time
+    LastAutoPinged time.Time
 }
 
 type PingResponse struct {
     IP     string `json:"ip"`
     Alive  bool   `json:"alive"`
     Cached bool   `json:"cached"`
+}
+
+type DebugResponse struct {
+    Config       Config                `json:"config"`
+    Cache        map[string]CacheEntry `json:"cache"`
+    ValidAPIKeys []string              `json:"validAPIKeys"`
+}
+
+func loadConfig(path string) error {
+    bytes, err := ioutil.ReadFile(path)
+    if err != nil {
+        return err
+    }
+    err = yaml.Unmarshal(bytes, &config)
+    return err
 }
 
 func loadAPIKeys(filePath string) error {
@@ -58,31 +89,30 @@ func pingAddress(ip string) bool {
 func pingAddresses(addresses []string, useCache bool) []PingResponse {
     var wg sync.WaitGroup
     results := make([]PingResponse, len(addresses))
-    mutex := sync.Mutex{}
 
     for i, addr := range addresses {
         wg.Add(1)
         go func(i int, addr string) {
             defer wg.Done()
 
+            now := time.Now()
             cached := false
             result := false
 
             mutex.Lock()
             entry, exists := cache[addr]
-            mutex.Unlock()
-
-            if useCache && exists && time.Since(entry.Timestamp) < 5*time.Minute {
+            if useCache && exists && (now.Sub(entry.LastRequested) < config.Ping.CacheValidDuration || now.Sub(entry.LastAutoPinged) < config.Ping.CacheValidDuration) {
                 result = entry.Result
                 cached = true
             } else {
                 result = pingAddress(addr)
-                if useCache {
-                    mutex.Lock()
-                    cache[addr] = CacheEntry{Timestamp: time.Now(), Result: result}
-                    mutex.Unlock()
+                cache[addr] = CacheEntry{
+                    Result:         result,
+                    LastRequested:  now,
+                    LastAutoPinged: now,
                 }
             }
+            mutex.Unlock()
 
             results[i] = PingResponse{
                 IP:     addr,
@@ -109,34 +139,14 @@ func pingHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Use cache by default; bypass cache if cache=false is specified
     useCache := true
-    if cacheParam, ok := r.URL.Query()["cache"]; ok && len(cacheParam) > 0 {
-        useCache = !(cacheParam[0] == "false")
+    if cacheParam, ok := r.URL.Query()["cache"]; ok && cacheParam[0] == "false" {
+        useCache = false
     }
 
     results := pingAddresses(addresses, useCache)
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(results)
-}
-
-func logRequest(next http.HandlerFunc) http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) {
-        start := time.Now()
-        lrw := &loggingResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-
-        next.ServeHTTP(lrw, r)
-
-        duration := time.Since(start)
-        logMessage := fmt.Sprintf("Method: %s, URI: %s, RemoteAddr: %s, StatusCode: %d, Duration: %s", r.Method, r.RequestURI, r.RemoteAddr, lrw.statusCode, duration)
-
-        if token := r.URL.Query().Get("token"); token != "" && isAPIKeyValid(token) {
-            redactedURI := strings.Replace(r.RequestURI, "token="+token, "token=[redacted]", 1)
-            logMessage = fmt.Sprintf("Method: %s, URI: %s, RemoteAddr: %s, StatusCode: %d, Duration: %s", r.Method, redactedURI, r.RemoteAddr, lrw.statusCode, duration)
-        }
-
-        log.Println(logMessage)
-    }
 }
 
 type loggingResponseWriter struct {
@@ -149,14 +159,86 @@ func (lrw *loggingResponseWriter) WriteHeader(code int) {
     lrw.ResponseWriter.WriteHeader(code)
 }
 
+func logRequest(next http.HandlerFunc) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        start := time.Now()
+        lrw := &loggingResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+
+        next.ServeHTTP(lrw, r)
+
+        log.Printf("Method: %s, URI: %s, RemoteAddr: %s, StatusCode: %d, Duration: %s\n", r.Method, r.RequestURI, r.RemoteAddr, lrw.statusCode, time.Since(start))
+    }
+}
+
+func autoPing() {
+    ticker := time.NewTicker(config.Ping.AutoPingInterval)
+    for range ticker.C {
+        now := time.Now()
+
+        mutex.Lock()
+        for ip, entry := range cache {
+            if now.Sub(entry.LastAutoPinged) < config.Ping.AutoPingInterval {
+                continue // Skip if recently auto-pinged
+            }
+
+            result := pingAddress(ip)
+            entry.Result = result
+            entry.LastAutoPinged = now
+            cache[ip] = entry
+
+            log.Printf("Auto-pinged %s with result %t", ip, result)
+
+            if now.Sub(entry.LastRequested) > config.Ping.CacheTTL {
+                log.Printf("Removing %s from cache due to inactivity", ip)
+                delete(cache, ip)
+            }
+        }
+        mutex.Unlock()
+    }
+}
+
+func debugHandler(w http.ResponseWriter, r *http.Request) {
+    token := r.URL.Query().Get("token")
+    if !isAPIKeyValid(token) {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    // Convert validAPIKeys map to a slice of strings for JSON encoding
+    var keys []string
+    for key := range validAPIKeys {
+        keys = append(keys, key)
+    }
+
+    response := DebugResponse{
+        Config:       config,
+        Cache:        cache,
+        ValidAPIKeys: keys,
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    if err := json.NewEncoder(w).Encode(response); err != nil {
+        http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+    }
+}
+
 func main() {
+    err := loadConfig("config.yaml")
+    if err != nil {
+        log.Fatalf("Failed to load configuration: %v", err)
+    }
+
     if err := loadAPIKeys("api_tokens.txt"); err != nil {
         log.Fatalf("Failed to load API keys: %v", err)
     }
 
+    go autoPing()
+
     http.HandleFunc("/ping", logRequest(pingHandler))
-    log.Println("Server starting on port 8080...")
-    if err := http.ListenAndServe(":8080", nil); err != nil {
+    http.HandleFunc("/debug", debugHandler)
+
+    log.Printf("Server starting on port %d...", config.API.Port)
+    if err := http.ListenAndServe(fmt.Sprintf(":%d", config.API.Port), nil); err != nil {
         log.Fatalf("Failed to start server: %v", err)
     }
 }
