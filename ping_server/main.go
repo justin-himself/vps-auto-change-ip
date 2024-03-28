@@ -3,17 +3,29 @@ package main
 import (
     "bufio"
     "encoding/json"
+    "fmt"
     "log"
     "net/http"
     "os"
     "os/exec"
+    "strings"
     "sync"
     "time"
-    "fmt"
-    "strings"
 )
 
 var validAPIKeys map[string]struct{}
+var cache = make(map[string]CacheEntry)
+
+type CacheEntry struct {
+    Timestamp time.Time
+    Result    bool
+}
+
+type PingResponse struct {
+    IP     string `json:"ip"`
+    Alive  bool   `json:"alive"`
+    Cached bool   `json:"cached"`
+}
 
 func loadAPIKeys(filePath string) error {
     file, err := os.Open(filePath)
@@ -43,20 +55,41 @@ func pingAddress(ip string) bool {
     return err == nil
 }
 
-func pingAddressesInParallel(addresses []string) map[string]bool {
+func pingAddresses(addresses []string, useCache bool) []PingResponse {
     var wg sync.WaitGroup
-    results := make(map[string]bool)
+    results := make([]PingResponse, len(addresses))
     mutex := sync.Mutex{}
 
-    for _, addr := range addresses {
+    for i, addr := range addresses {
         wg.Add(1)
-        go func(addr string) {
+        go func(i int, addr string) {
             defer wg.Done()
-            result := pingAddress(addr)
+
+            cached := false
+            result := false
+
             mutex.Lock()
-            results[addr] = result
+            entry, exists := cache[addr]
             mutex.Unlock()
-        }(addr)
+
+            if useCache && exists && time.Since(entry.Timestamp) < 5*time.Minute {
+                result = entry.Result
+                cached = true
+            } else {
+                result = pingAddress(addr)
+                if useCache {
+                    mutex.Lock()
+                    cache[addr] = CacheEntry{Timestamp: time.Now(), Result: result}
+                    mutex.Unlock()
+                }
+            }
+
+            results[i] = PingResponse{
+                IP:     addr,
+                Alive:  result,
+                Cached: cached,
+            }
+        }(i, addr)
     }
 
     wg.Wait()
@@ -76,19 +109,15 @@ func pingHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    results := pingAddressesInParallel(addresses)
+    // Use cache by default; bypass cache if cache=false is specified
+    useCache := true
+    if cacheParam, ok := r.URL.Query()["cache"]; ok && len(cacheParam) > 0 {
+        useCache = !(cacheParam[0] == "false")
+    }
+
+    results := pingAddresses(addresses, useCache)
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(results)
-}
-
-type loggingResponseWriter struct {
-    http.ResponseWriter
-    statusCode int
-}
-
-func (lrw *loggingResponseWriter) WriteHeader(code int) {
-    lrw.statusCode = code
-    lrw.ResponseWriter.WriteHeader(code)
 }
 
 func logRequest(next http.HandlerFunc) http.HandlerFunc {
@@ -101,7 +130,6 @@ func logRequest(next http.HandlerFunc) http.HandlerFunc {
         duration := time.Since(start)
         logMessage := fmt.Sprintf("Method: %s, URI: %s, RemoteAddr: %s, StatusCode: %d, Duration: %s", r.Method, r.RequestURI, r.RemoteAddr, lrw.statusCode, duration)
 
-        // Pattern match and redact token from the log message
         if token := r.URL.Query().Get("token"); token != "" && isAPIKeyValid(token) {
             redactedURI := strings.Replace(r.RequestURI, "token="+token, "token=[redacted]", 1)
             logMessage = fmt.Sprintf("Method: %s, URI: %s, RemoteAddr: %s, StatusCode: %d, Duration: %s", r.Method, redactedURI, r.RemoteAddr, lrw.statusCode, duration)
@@ -109,6 +137,16 @@ func logRequest(next http.HandlerFunc) http.HandlerFunc {
 
         log.Println(logMessage)
     }
+}
+
+type loggingResponseWriter struct {
+    http.ResponseWriter
+    statusCode int
+}
+
+func (lrw *loggingResponseWriter) WriteHeader(code int) {
+    lrw.statusCode = code
+    lrw.ResponseWriter.WriteHeader(code)
 }
 
 func main() {
