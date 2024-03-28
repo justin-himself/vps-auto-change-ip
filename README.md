@@ -16,7 +16,9 @@ python3 app/main.py
 
 ```bash
 # 部署在国内
-uvicorn app/ping_server.py
+# uvicorn app/ping_server.py
+cd ping_server & go build
+./ping_server
 
 # 部署在国外
 python3 app/main.py
