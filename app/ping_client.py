@@ -51,5 +51,5 @@ def remote_ping(ipaddress_list : list, config):
     response = requests.get(f"{addr}/ping?token={token}" + args)
     if response.status_code != 200:
         raise Exception(response.text)
-    res = {k: v["alive"] for k, v in response.json().items()}
+    res = {ip["ip"]: ip["alive"] for ip in response.json()}
     return [res[x] for x in ipaddress_list]
