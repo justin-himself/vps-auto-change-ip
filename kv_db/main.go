@@ -117,7 +117,7 @@ func loadAPIKeys() {
 
 func authenticate(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" || r.URL.Path == "/" {
+		if r.Method != "GET" {
 			apiKeyHeader := r.Header.Get("X-API-Key")
 			if _, exists := apiKeys[apiKeyHeader]; !exists {
 				http.Error(w, "Unauthorized: API key is invalid or missing", http.StatusUnauthorized)
