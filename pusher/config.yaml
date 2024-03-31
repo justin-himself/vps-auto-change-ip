@@ -1,0 +1,5 @@
+apiToken: "delete_me"
+kvDBURL: "http://localhost:8080"
+upstreamURL: "https://www.wikipedia.org"
+fetchInterval: 5 # Interval in minutes
+

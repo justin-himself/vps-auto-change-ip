@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -97,7 +98,7 @@ func loadAPIKeys() {
 	apiKeys = make(map[string]bool)
 	file, err := os.Open("api_keys.txt")
 	if err != nil {
-		panic(fmt.Sprintf("Failed to load API keys: %v", err))
+		log.Fatalf("Failed to load API keys: %v", err)
 	}
 	defer file.Close()
 
@@ -110,14 +111,13 @@ func loadAPIKeys() {
 	}
 
 	if len(apiKeys) == 0 {
-		panic("No API keys loaded; ensure api_keys.txt is not empty.")
+		log.Fatal("No API keys loaded; ensure api_keys.txt is not empty.")
 	}
 }
 
 func authenticate(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Allow GET requests without API key except for the root path
-		if r.Method != "GET" || r.URL.Path == "/db.txt" {
+		if r.Method != "GET" || r.URL.Path == "/" {
 			apiKeyHeader := r.Header.Get("X-API-Key")
 			if _, exists := apiKeys[apiKeyHeader]; !exists {
 				http.Error(w, "Unauthorized: API key is invalid or missing", http.StatusUnauthorized)
@@ -128,6 +128,24 @@ func authenticate(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+type responseRecorder struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rec *responseRecorder) WriteHeader(code int) {
+	rec.statusCode = code
+	rec.ResponseWriter.WriteHeader(code)
+}
+
+func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("Request received: %s %s", r.Method, r.URL.Path)
+		rec := responseRecorder{ResponseWriter: w, statusCode: http.StatusOK}
+		next(&rec, r)
+		log.Printf("Response sent: %s %s %d", r.Method, r.URL.Path, rec.statusCode)
+	}
+}
 
 func serveReadme(w http.ResponseWriter, r *http.Request) {
 	content, err := ioutil.ReadFile("readme.txt")
@@ -138,27 +156,14 @@ func serveReadme(w http.ResponseWriter, r *http.Request) {
 	w.Write(content)
 }
 
-func serveDb(w http.ResponseWriter, r *http.Request) {
-	content, err := ioutil.ReadFile("db.txt")
-	if err != nil {
-		http.Error(w, "Failed to read db.txt", http.StatusInternalServerError)
-		return
-	}
-	w.Write(content)
-}
-
-
 func main() {
 	loadAPIKeys()
 	kv := NewKVStore()
+
+	// Wrap the handler with the loggingMiddleware
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" && r.Method == "GET" {
 			serveReadme(w, r)
-			return
-		}
-
-		if r.URL.Path == "/db.txt" && r.Method == "GET" {
-			serveDb(w, r)
 			return
 		}
 
@@ -192,12 +197,11 @@ func main() {
 		}
 	}
 
-	authenticatedHandler := authenticate(handler)
+	authenticatedHandler := authenticate(loggingMiddleware(handler))
 	http.HandleFunc("/", authenticatedHandler)
 
-	fmt.Println("Server is running on http://localhost:8080")
+	log.Println("Server is running on http://localhost:8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
-		panic(fmt.Sprintf("Failed to start server: %v", err))
+		log.Fatalf("Failed to start server: %v", err)
 	}
 }
-
