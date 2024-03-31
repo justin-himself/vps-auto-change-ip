@@ -200,8 +200,8 @@ func main() {
 	authenticatedHandler := authenticate(loggingMiddleware(handler))
 	http.HandleFunc("/", authenticatedHandler)
 
-	log.Println("Server is running on http://localhost:8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	log.Println("Server is running on http://localhost:8081")
+	if err := http.ListenAndServe(":8081", nil); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
