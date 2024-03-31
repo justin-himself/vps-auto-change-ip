@@ -1,4 +1,3 @@
-txt
 Key-Value Store API Documentation
 
 Overview:
