@@ -1,7 +1,7 @@
 Key-Value Store API Documentation
 
 Overview:
-This API allows clients to store, retrieve, delete, and bulk update key-value pairs. All requests must be authenticated using an API key.
+This API allows clients to store, retrieve, delete, and bulk update key-value pairs. All requests except for GET must be authenticated using an API key.
 
 Authentication:
 - To authenticate, include your API key in the header of each request using the X-API-Key header.
@@ -23,7 +23,7 @@ GET - Retrieve a Value by Key
 - Method: GET
 - Description: Retrieves the value associated with the specified key. 
 - Response: The value of the key if it exists; otherwise, a "Key not found" error.
-- Example Request: curl -X GET http://localhost:8080/path/to/key -H "X-API-Key: <your_api_key>"
+- Example Request: curl -X GET http://localhost:8080/path/to/key 
 
 DELETE - Delete a Key-Value Pair
 - Endpoint: /{key}
