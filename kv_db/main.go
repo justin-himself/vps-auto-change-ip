@@ -9,6 +9,7 @@ import (
     "os"
     "strings"
     "sync"
+    "regexp"
 )
 
 var apiKeys map[string]bool
@@ -17,6 +18,12 @@ type KVStore struct {
     sync.RWMutex
     store map[string]string
 }
+
+type responseRecorder struct {
+    http.ResponseWriter
+    statusCode int
+}
+
 
 func NewKVStore() *KVStore {
     kv := &KVStore{
@@ -128,13 +135,28 @@ func authenticate(next http.HandlerFunc) http.HandlerFunc {
     }
 }
 
+func newResponseRecorder(w http.ResponseWriter) *responseRecorder {
+    // Default the status code to 200 for cases where WriteHeader is not called
+    return &responseRecorder{ResponseWriter: w, statusCode: http.StatusOK}
+}
+
+func (r *responseRecorder) WriteHeader(code int) {
+    r.statusCode = code
+    r.ResponseWriter.WriteHeader(code)
+}
+
 func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
-        log.Printf("Request received: %s %s", r.Method, r.URL.Path)
-        next(w, r)
-        log.Printf("Response sent for: %s %s", r.Method, r.URL.Path)
+        // Use the responseRecorder to capture the status code
+        rec := newResponseRecorder(w)
+
+        next(rec, r)
+
+        // Log the method, URI, and status code in one line
+        log.Printf("%s %s %d", r.Method, r.URL.RequestURI(), rec.statusCode)
     }
 }
+
 
 func serveReadme(w http.ResponseWriter, r *http.Request) {
     content, err := ioutil.ReadFile("readme.txt")
@@ -145,17 +167,29 @@ func serveReadme(w http.ResponseWriter, r *http.Request) {
     w.Write(content)
 }
 
+func fileExists(filename string) bool {
+    info, err := os.Stat(filename)
+    return !os.IsNotExist(err) && !info.IsDir()
+}
+
 func main() {
     loadAPIKeys()
     kv := NewKVStore()
 
     authenticatedHandler := authenticate(loggingMiddleware(func(w http.ResponseWriter, r *http.Request) {
-        if r.URL.Path == "/" && r.Method == "GET" {
+        allowedCharsRegex := regexp.MustCompile(`^[0-9a-zA-Z\$\-\_\.\+\!\*'\(\);\ / \?\:\@\=\&\ \ \"\<\>\#\%\{\}\|\ \\ \^\~\[\]]+$`)
+
+        // Verify if the URL contains only allowed characters
+        if !allowedCharsRegex.MatchString(r.URL.RequestURI()) {
+            http.Error(w, "URL contains invalid characters", http.StatusBadRequest)
+            return
+        }
+        if r.URL.RequestURI() == "/" && r.Method == "GET" {
             serveReadme(w, r)
             return
         }
 
-        key := strings.TrimPrefix(r.URL.Path, "/")
+        key := r.URL.RequestURI()
         switch r.Method {
         case "POST", "PUT":
             body, err := ioutil.ReadAll(r.Body)
@@ -186,21 +220,30 @@ func main() {
     }))
     http.HandleFunc("/", authenticatedHandler)
 
-    // Starting HTTP server
-    go func() {
-        log.Println("HTTP server is running on http://localhost:8081")
-        if err := http.ListenAndServe(":8081", nil); err != nil {
-            log.Fatalf("Failed to start HTTP server: %v", err)
-        }
-    }()
+    // Check for SSL certificate and key
+    certFile := "ssl/fullchain.pem"
+    keyFile := "ssl/privkey.pem"
 
-    // Starting HTTPS server
-    go func() {
-        log.Println("HTTPS server is running on https://localhost:8443")
-        if err := http.ListenAndServeTLS(":8443", "ssl/fullchain.pem", "ssl/privkey.pem", nil); err != nil {
-            log.Fatalf("Failed to start HTTPS server: %v", err)
-        }
-    }()
+    if fileExists(certFile) && fileExists(keyFile) {
+        // Both certificate and key files exist, start HTTPS server in a new goroutine
+        go func() {
+            log.Println("HTTPS server is running on https://localhost:8443")
+            err := http.ListenAndServeTLS(":8443", certFile, keyFile, nil)
+            if err != nil {
+                log.Fatalf("Failed to start HTTPS server: %v", err)
+            }
+        }()
+    } else {
+        // Certificate or key file does not exist, log a warning
+        log.Println("Warning: SSL certificate or key not found. HTTPS server will not start.")
+    }
+
+    // Always start HTTP server
+    log.Println("HTTP server is running on http://localhost:8081")
+    err := http.ListenAndServe(":8081", nil)
+    if err != nil {
+        log.Fatalf("Failed to start HTTP server: %v", err)
+    }
 
     select {} // Keep the main goroutine running
 }
