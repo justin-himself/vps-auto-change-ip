@@ -2,6 +2,7 @@ package main
 
 import (
     "bufio"
+    "encoding/base64"
     "fmt"
     "io/ioutil"
     "log"
@@ -18,12 +19,6 @@ type KVStore struct {
     sync.RWMutex
     store map[string]string
 }
-
-type responseRecorder struct {
-    http.ResponseWriter
-    statusCode int
-}
-
 
 func NewKVStore() *KVStore {
     kv := &KVStore{
@@ -47,7 +42,12 @@ func (kv *KVStore) loadFromFile() {
     for scanner.Scan() {
         parts := strings.SplitN(scanner.Text(), ",", 2)
         if len(parts) == 2 {
-            kv.store[parts[0]] = parts[1]
+            decodedValue, err := base64.StdEncoding.DecodeString(parts[1])
+            if err != nil {
+                log.Printf("Error decoding Base64 data: %v", err)
+                continue
+            }
+            kv.store[parts[0]] = string(decodedValue)
         }
     }
 }
@@ -60,7 +60,8 @@ func (kv *KVStore) saveToFile() {
     defer file.Close()
 
     for key, value := range kv.store {
-        fmt.Fprintf(file, "%s,%s\n", key, value)
+        encodedValue := base64.StdEncoding.EncodeToString([]byte(value))
+        fmt.Fprintf(file, "%s,%s\n", key, encodedValue)
     }
 }
 
@@ -94,7 +95,12 @@ func (kv *KVStore) ReplaceStore(newContents string) {
     for scanner.Scan() {
         parts := strings.SplitN(scanner.Text(), ",", 2)
         if len(parts) == 2 {
-            kv.store[parts[0]] = parts[1]
+            decodedValue, err := base64.StdEncoding.DecodeString(parts[1])
+            if err != nil {
+                log.Printf("Error decoding Base64 data: %v", err)
+                continue
+            }
+            kv.store[parts[0]] = string(decodedValue)
         }
     }
 
@@ -135,16 +141,6 @@ func authenticate(next http.HandlerFunc) http.HandlerFunc {
     }
 }
 
-func newResponseRecorder(w http.ResponseWriter) *responseRecorder {
-    // Default the status code to 200 for cases where WriteHeader is not called
-    return &responseRecorder{ResponseWriter: w, statusCode: http.StatusOK}
-}
-
-func (r *responseRecorder) WriteHeader(code int) {
-    r.statusCode = code
-    r.ResponseWriter.WriteHeader(code)
-}
-
 func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
         // Use the responseRecorder to capture the status code
@@ -157,6 +153,20 @@ func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
     }
 }
 
+type responseRecorder struct {
+    http.ResponseWriter
+    statusCode int
+}
+
+func newResponseRecorder(w http.ResponseWriter) *responseRecorder {
+    // Default the status code to 200 for cases where WriteHeader is not called
+    return &responseRecorder{ResponseWriter: w, statusCode: http.StatusOK}
+}
+
+func (r *responseRecorder) WriteHeader(code int) {
+    r.statusCode = code
+    r.ResponseWriter.WriteHeader(code)
+}
 
 func serveReadme(w http.ResponseWriter, r *http.Request) {
     content, err := ioutil.ReadFile("readme.txt")
@@ -169,7 +179,10 @@ func serveReadme(w http.ResponseWriter, r *http.Request) {
 
 func fileExists(filename string) bool {
     info, err := os.Stat(filename)
-    return !os.IsNotExist(err) && !info.IsDir()
+    if err != nil {
+        return false
+    }
+    return !info.IsDir()
 }
 
 func main() {
@@ -247,4 +260,3 @@ func main() {
 
     select {} // Keep the main goroutine running
 }
-
