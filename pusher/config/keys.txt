@@ -1,1 +1,1 @@
-wiki/Egg
+wiki/Egg,curl
